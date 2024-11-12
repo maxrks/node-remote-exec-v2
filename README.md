@@ -30,7 +30,7 @@ const remoteExec = require('remote-exec-v2');
 
 // Define connection options and hosts
 const hosts = [
-  { host: '192.168.0.111', name: 'Server1' },
+  { host: '192.168.0.111', name: 'Server1', encoding:'gbk' },
   { host: '192.168.0.222', name: 'Server2' }
 ];
 
@@ -52,11 +52,11 @@ remoteExec(hosts, cmds, options, (err) => {
 ```
 
 ## Options
-
-- **force**: If set to `true`, risky commands will be executed. Default is `false`.
 - **port**: SSH port (default is `22`).
 - **username**: SSH username (default is `root`).
 - **privateKey**: Path to the private key for authentication.
+- **encoding**: SSH connection encoding (default is `null`).
+- **force**: If set to `true`, risky commands will be executed. Default is `false`.
 
 ## Risky Commands
 

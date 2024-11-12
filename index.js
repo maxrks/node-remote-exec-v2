@@ -69,7 +69,7 @@ async function remoteExec(hosts, cmds, options = {}, cb = (err) => {}) {
     const serverName =
       typeof hostEntry === "string" ? hostEntry : hostEntry.name || host;
 
-    console.log(`Connecting to host: ${serverName} (${host})`);
+    //console.log(`Connecting to host: ${serverName} (${host})`);
     const conn = new Client();
     const hostOptions = { ...mergedOptions, host };
 
@@ -79,8 +79,8 @@ async function remoteExec(hosts, cmds, options = {}, cb = (err) => {}) {
           console.log(`Connected to ${serverName}`);
 
           try {
-            await executeCommands(conn, filteredCmds); // Execute filtered commands
-            console.log(`Completed all commands on ${serverName}`);
+            await executeCommands(conn, filteredCmds, hostEntry, mergedOptions); // Pass hostEntry for dynamic encoding
+            //console.log(`Completed all commands on ${serverName}`);
             conn.end();
             resolve();
           } catch (err) {
@@ -105,9 +105,12 @@ async function remoteExec(hosts, cmds, options = {}, cb = (err) => {}) {
 }
 
 // Function to execute commands on the remote host
-function executeCommands(conn, filteredCmds) {
+function executeCommands(conn, filteredCmds, hostEntry, options) {
   return new Promise((resolve, reject) => {
     let currentCmdIndex = 0;
+
+    // Determine the encoding for this host
+    const hostEncoding = hostEntry.encoding || options.encoding; // Prioritize host-specific encoding
 
     function runNextCommand() {
       if (currentCmdIndex >= filteredCmds.length) {
@@ -133,20 +136,25 @@ function executeCommands(conn, filteredCmds) {
           return;
         }
 
-        stream.setEncoding("binary");
+        if (hostEncoding) {
+          stream.setEncoding("binary"); // Handle binary encoding if specified
+        }
 
         stream.on("data", (data) => {
-          const output = iconv.decode(Buffer.from(data, "binary"), "gbk");
+          const output = hostEncoding
+            ? iconv.decode(Buffer.from(data, "binary"), hostEncoding)
+            : data.toString();
           console.log(output);
         });
 
         stream.stderr.on("data", (data) => {
-          const output = iconv.decode(Buffer.from(data, "binary"), "gbk");
+          const output = hostEncoding
+            ? iconv.decode(Buffer.from(data, "binary"), hostEncoding)
+            : data.toString();
           console.log(output);
         });
 
         stream.on("close", (code, signal) => {
-          console.log(`Command "${cmd}" completed with code: ${code}`);
           currentCmdIndex++;
           runNextCommand();
         });
