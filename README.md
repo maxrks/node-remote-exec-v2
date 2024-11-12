@@ -1,119 +1,80 @@
-# remote-exec
+# remote-exec-v2
 
-**Very simple wrapper for [ssh2](https://github.com/mscdex/ssh2) to execute shell commands on one or more remote computers in node via SSH**
+`remote-exec-v2` is a Node.js package that enables you to execute commands remotely on multiple servers via SSH. This package helps to automate tasks across multiple hosts, while ensuring safe execution by filtering risky commands.
 
-## install
+## Why remote-exec-v2?
 
+Thanks to [https://github.com/tpresley/node-remote-exec](), but it had not been updated for a long time and cannot connect to OpenSSH server version 8.8 and newer SSH servers.  This package is fresh, parameters may not be fully compatible.
+
+
+## Runtime
+
+ Developed with node v22.11.0 under MacOS 15.1, not tested on other platforms.
+
+## Features
+
+- Execute commands on multiple servers
+- Automatically skip risky commands (e.g., `rm -rf /`, `shutdown`, etc.)
+- Use force option to override command safety checks
+
+## Installation
+
+```bash
+npm install remote-exec-v2
 ```
-npm install remote-exec
-```
 
-## usage
+## Usage
 
 ```javascript
-var rexec = require('remote-exec');
-rexec(hosts <string|array>, commands <string|array>, options <object>, callback <function>);
-```
-### hosts
-hosts can be a string, an array of strings, or an array of objects   
-if hosts is an array of objects, the **name** key of each object will be used to connect to the host
+const remoteExec = require('remote-exec-v2');
 
-### commands
-commands can be a string or an array of strings   
-commands can also contain parameters using the {{myParameter}} syntax (see below)
-
-### options
-options is the connection options object used for [ssh2](https://github.com/mscdex/ssh2) with the following additions:
-- the **params** key takes an object declaring global/default values for parameters used in commands
-- the **beforeEach** key takes a callback function run for each host before commands are run (passed host, commands, and params objects)
-- the **afterEach** key takes a callback function run for each host after commands are run or when an error is encountered (passed host, commands, params, and err objects)
-- **stdout** and/or **stderr** can be specified to change where output from the remote hosts is sent
-
-## examples
-
-### basic
-```javascript
-var rexec = require('remote-exec');
-
-// see documentation for the ssh2 npm package for a list of all options 
-var connection_options = {
-	port: 22,
-	username: 'myuser',
-	privateKey: require('fs').readFileSync('~/.ssh/rsa_id'),
-	passphrase: 'mypassphrase'
-};
-
-var hosts = [
-	'host1.somewhere.com',
-	'host2.somewhere.else.com',
-	'250.110.0.13'
+// Define connection options and hosts
+const hosts = [
+  { host: '192.168.0.111', name: 'Server1' },
+  { host: '192.168.0.222', name: 'Server2' }
 ];
 
-var cmds = [
-	'ls -l',
-	'cat /etc/hosts'
+const cmds = [
+  'ping 192.168.0.254',
+  'rm ~/something.txt' // This will be skipped due to safety checks
 ];
 
-rexec(hosts, cmds, connection_options, function(err){
-	if (err) {
-		console.log(err);
-	} else {
-		console.log('Great Success!!');
-	}
+const options = { force: false }; // Set to true to override risky command checks
+
+// Execute commands
+remoteExec(hosts, cmds, options, (err) => {
+  if (err) {
+    console.error('Error executing commands:', err);
+  } else {
+    console.log('Commands executed successfully on all hosts.');
+  }
 });
 ```
 
-### parameters
-```javascript
-// commands can be parameterized using the {{parameterName}} syntax
-// parameters can be set at the global or host level
+## Options
 
-// global parameters should be set via the params key of the connections options
-var connection_options = {
-	port: 22,
-	username: 'myuser',
-	privateKey: require('fs').readFileSync('~/.ssh/rsa_id'),
-	passphrase: 'mypassphrase',
-	params: {
-		myParam: 'something',
-		anotherParam: 'something else'
-	}
-}
+- **force**: If set to `true`, risky commands will be executed. Default is `false`.
+- **port**: SSH port (default is `22`).
+- **username**: SSH username (default is `root`).
+- **privateKey**: Path to the private key for authentication.
 
-// to set a parameter for a specific host:
-var hosts = [
-	{name: 'host1.somewhere.com', myParam: 'this overrides the global myParam value', blah: 'this is an additional parameter at the host level'},
-	{name: 'host2.somewhere.else.com'} // this host will only get the global parameters
-];
+## Risky Commands
 
-var cmds = [
-	'echo "{{myParam}}"'
-];
+The following commands are considered risky and will be skipped unless `force` is set to `true`:
 
-rexec(hosts, cmds, connection_options, function(err){
-	if (err) {
-		console.log(err);
-	} else {
-		console.log('Great Success!!');
-	}
-});
-```
+- `rm -rf /`
+- `shutdown`
+- `reboot`
+- `del`
+- `format`
+- `sc delete`
 
-### output
-```javascript
-// by default all output for remote computers is routed to process.stdout and process.stderr
-// but this can be overridden by passing valid writable streams to the stdout and/or stderr
-// keys of the connection options
+## Contributing
 
-var rexec = require('remote-exec')
-  , fs = require('fs');
+Thanks to [openai/chatgpt](https://openai.com/) for code generation.
 
-var connection_options = {
-  port: 22,
-  stdout: fs.createWriteStream('./out.txt'),
-  stderr: fs.createWriteStream('./err.txt')
-}
+If you want to contribute, feel free to fork the repository and create a pull request.
 
-rexec('myserver.com', 'cat /proc/cpuinfo', connection_options);
+## License
 
-```
+MIT License

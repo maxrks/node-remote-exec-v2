@@ -1,6 +1,6 @@
 {
-  "name": "remote-exec",
-  "version": "0.0.3",
+  "name": "remote-exec-v2",
+  "version": "2.0.0-alpha.1",
   "description": "Execute shell commands on one or more remote computers via SSH",
   "main": "index.js",
   "scripts": {
@@ -8,7 +8,7 @@
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/tpresley/node-remote-exec.git"
+    "url": "https://github.com/maxrks/node-remote-exec-v2.git"
   },
   "keywords": [
     "ssh",
@@ -16,17 +16,19 @@
     "exec",
     "shell"
   ],
-  "author": "Troy Presley",
+  "author": "maxrks",
   "license": "MIT",
   "bugs": {
-    "url": "https://github.com/tpresley/node-remote-exec/issues"
-  },
-  "dependencies": {
-    "ssh2": "~0.2.14",
-    "async": "~0.2.9"
+    "url": "https://github.com/maxrks/node-remote-exec-v2/issues"
   },
   "files": [
     "index.js",
     "LICENSE"
-  ]
+  ],
+  "dependencies": {
+    "@types/iconv-lite": "^0.0.1",
+    "@types/ssh2": "^1.15.1",
+    "iconv-lite": "^0.6.3",
+    "ssh2": "^1.16.0"
+  }
 }
