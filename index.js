@@ -4,21 +4,19 @@ const path = require("path");
 const os = require("os");
 const iconv = require("iconv-lite");
 
-// Default SSH connection options
 const defaultOptions = {
   port: 22,
   username: "root",
   privateKey: fs.readFileSync(path.resolve(os.homedir(), ".ssh", "id_rsa")),
-  force: false, // Flag to allow risky commands
-  encoding: null, // Optional encoding for stdout and stderr
+  force: false,
+  encoding: null,
 };
 
-// List of risky commands
 const riskyCommands = [
   "rm",
   "rmdir",
   "del",
-  "rimraf", // Common risky commands
+  "rimraf",
   "rm -rf",
   "shutdown",
   "reboot",
@@ -28,7 +26,7 @@ const riskyCommands = [
   "chown root",
   "kill -9 -1",
   "mv /",
-  "cp /", // Linux / macOS
+  "cp /",
   "del /f /s /q",
   "format",
   "netsh advfirewall reset",
@@ -38,132 +36,118 @@ const riskyCommands = [
   "taskkill /F /IM",
   "reg delete",
   "sc stop",
-  "sc delete", // Windows
+  "sc delete",
 ];
 
-// Function to check if a command is risky
 function isCommandRisky(cmd) {
   return riskyCommands.some((riskyCmd) =>
     cmd.toLowerCase().includes(riskyCmd.toLowerCase())
   );
 }
 
-// Filter and mark commands as risky or safe
 function filterCommands(cmds, options = {}) {
   return cmds.map((cmd) => ({
     cmd,
-    isRisky: isCommandRisky(cmd) && !options.force, // Mark risky if not forced
+    isRisky: isCommandRisky(cmd) && !options.force,
   }));
 }
 
-// Main remoteExec function
-async function remoteExec(hosts, cmds, options = {}, cb = (err) => {}) {
-  let errorOccurred = null;
+function executeCommands(conn, filteredCmds, hostEntry, options, serverName) {
+  return new Promise((resolve, reject) => {
+    let index = 0;
+    const encoding = hostEntry.encoding || options.encoding;
 
-  // Merge user options with default options
+    function runNext() {
+      if (index >= filteredCmds.length) return resolve();
+
+      const { cmd, isRisky } = filteredCmds[index];
+      if (isRisky) {
+        console.warn(`[${serverName}] Skipping risky command: ${cmd}`);
+        index++;
+        runNext();
+        return;
+      }
+
+      console.log(`[${serverName}] > Executing: ${cmd}`);
+      conn.exec(cmd, (err, stream) => {
+        if (err) return reject(err);
+        if (encoding) stream.setEncoding("binary");
+
+        stream.on("data", (data) => {
+          const output = encoding
+            ? iconv.decode(Buffer.from(data, "binary"), encoding)
+            : data.toString();
+          process.stdout.write(`[${serverName}] ${output}`);
+        });
+
+        stream.stderr.on("data", (data) => {
+          const output = encoding
+            ? iconv.decode(Buffer.from(data, "binary"), encoding)
+            : data.toString();
+          process.stderr.write(`[${serverName}] ERROR: ${output}`);
+        });
+
+        stream.on("close", () => {
+          index++;
+          runNext();
+        });
+      });
+    }
+
+    runNext();
+  });
+}
+
+async function remoteExec(hosts, cmds, options = {}, cb = () => {}) {
   const mergedOptions = { ...defaultOptions, ...options };
   const filteredCmds = filterCommands(cmds, mergedOptions);
 
-  for (const hostEntry of hosts) {
+  const tasks = hosts.map((hostEntry) => {
     const host = typeof hostEntry === "string" ? hostEntry : hostEntry.host;
     const serverName =
       typeof hostEntry === "string" ? hostEntry : hostEntry.name || host;
 
-    //console.log(`Connecting to host: ${serverName} (${host})`);
     const conn = new Client();
     const hostOptions = { ...mergedOptions, host };
 
-    try {
-      await new Promise((resolve, reject) => {
-        conn.on("ready", async () => {
-          console.log(`Connected to ${serverName}`);
-
+    return new Promise((resolve, reject) => {
+      conn
+        .on("ready", async () => {
+          console.log(`[${serverName}] Connected`);
           try {
-            await executeCommands(conn, filteredCmds, hostEntry, mergedOptions); // Pass hostEntry for dynamic encoding
-            //console.log(`Completed all commands on ${serverName}`);
+            await executeCommands(
+              conn,
+              filteredCmds,
+              hostEntry,
+              mergedOptions,
+              serverName
+            );
             conn.end();
-            resolve();
+            resolve({ host, success: true });
           } catch (err) {
             conn.end();
-            reject(err);
+            reject({ host, success: false, error: err });
           }
-        });
-
-        conn.on("error", (err) => {
-          reject(err);
-        });
-
-        conn.connect(hostOptions);
-      });
-    } catch (err) {
-      errorOccurred = errorOccurred || err;
-      break;
-    }
-  }
-
-  cb(errorOccurred);
-}
-
-// Function to execute commands on the remote host
-function executeCommands(conn, filteredCmds, hostEntry, options) {
-  return new Promise((resolve, reject) => {
-    let currentCmdIndex = 0;
-
-    // Determine the encoding for this host
-    const hostEncoding = hostEntry.encoding || options.encoding; // Prioritize host-specific encoding
-
-    function runNextCommand() {
-      if (currentCmdIndex >= filteredCmds.length) {
-        resolve();
-        return;
-      }
-
-      const { cmd, isRisky } = filteredCmds[currentCmdIndex];
-      if (isRisky) {
-        console.warn(
-          `Skipping risky command "${cmd}" - use force:true in options to execute.`
-        );
-        currentCmdIndex++;
-        runNextCommand();
-        return;
-      }
-
-      console.log(`Executing command: ${cmd}`);
-
-      conn.exec(cmd, (err, stream) => {
-        if (err) {
-          reject(err);
-          return;
-        }
-
-        if (hostEncoding) {
-          stream.setEncoding("binary"); // Handle binary encoding if specified
-        }
-
-        stream.on("data", (data) => {
-          const output = hostEncoding
-            ? iconv.decode(Buffer.from(data, "binary"), hostEncoding)
-            : data.toString();
-          console.log(output);
-        });
-
-        stream.stderr.on("data", (data) => {
-          const output = hostEncoding
-            ? iconv.decode(Buffer.from(data, "binary"), hostEncoding)
-            : data.toString();
-          console.log(output);
-        });
-
-        stream.on("close", (code, signal) => {
-          currentCmdIndex++;
-          runNextCommand();
-        });
-      });
-    }
-
-    runNextCommand();
+        })
+        .on("error", (err) => {
+          reject({ host, success: false, error: err });
+        })
+        .connect(hostOptions);
+    });
   });
+
+  const results = await Promise.allSettled(tasks);
+  const errors = results
+    .filter((r) => r.status === "rejected")
+    .map((r) => r.reason);
+
+  if (errors.length > 0) {
+    console.error("Some hosts failed:", errors.map((e) => e.host).join(", "));
+    cb(errors[0]);
+  } else {
+    console.log("✅ All hosts executed successfully.");
+    cb(null);
+  }
 }
 
-// Export the remoteExec function
 module.exports = remoteExec;
