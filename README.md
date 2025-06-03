@@ -1,21 +1,28 @@
 # remote-exec-v2
 
-`remote-exec-v2` is a Node.js package that enables you to execute commands remotely on multiple servers via SSH. This package helps to automate tasks across multiple hosts, while ensuring safe execution by filtering risky commands.
+`remote-exec-v2` is a modern Node.js package that allows executing commands over SSH on multiple servers. It enhances automation while being careful with dangerous operations.
 
 ## Why remote-exec-v2?
 
-Thanks to [https://github.com/tpresley/node-remote-exec](), but it had not been updated for a long time and cannot connect to OpenSSH server version 8.8 and newer SSH servers.  This package is fresh, parameters may not be fully compatible.
-
+Thanks to https://github.com/tpresley/node-remote-exec, which inspired this project. However, that package has not been updated for years and cannot connect to newer OpenSSH servers (v8.8+). `remote-exec-v2` is a fresh alternative with updated features.
 
 ## Runtime
 
- Developed with node v22.11.0 under MacOS 15.1, not tested on other platforms.
+Developed and tested with:
+
+- Node.js v22.11.0
+- macOS 15.1
+
+> Other platforms are not officially tested yet.
 
 ## Features
 
-- Execute commands on multiple servers
-- Automatically skip risky commands (e.g., `rm -rf /`, `shutdown`, etc.)
-- Use force option to override command safety checks
+- Execute commands on multiple remote hosts via SSH
+- Automatically skips dangerous commands (e.g., `rm -rf /`, `shutdown`)
+- Sequential or parallel execution mode
+- Force execution of risky commands (optional)
+- Supports custom encoding (e.g., GBK for Windows)
+- Optional timestamped output and detailed logging
 
 ## Installation
 
@@ -26,55 +33,85 @@ npm install remote-exec-v2
 ## Usage
 
 ```javascript
-const remoteExec = require('remote-exec-v2');
+const remoteExec = require("remote-exec-v2");
 
-// Define connection options and hosts
 const hosts = [
-  { host: '192.168.0.111', name: 'Server1', encoding:'gbk' },
-  { host: '192.168.0.222', name: 'Server2' }
+  { host: "192.168.0.101", name: "Server-A", encoding: "gbk" },
+  { host: "192.168.0.102", name: "Server-B" }
 ];
 
-const cmds = [
-  'ping 192.168.0.254',
-  'rm ~/something.txt' // This will be skipped due to safety checks
+// or hosts in simple way
+// const hosts = ["192.168.0.101","192.168.0.12"];
+
+const commands = [
+  "echo Hello World",
+  "dir /w",
+  "rm -rf /important" // this will be skipped unless force: true
 ];
 
-const options = { force: false }; // Set to true to override risky command checks
+const options = {
+  force: false,      // Skip risky commands (default)
+  timestamp: true,   // Show timestamps and host names
+  parallel: false    // Run sequentially
+};
 
-// Execute commands
-remoteExec(hosts, cmds, options, (err) => {
+remoteExec(hosts, commands, options, (err) => {
   if (err) {
-    console.error('Error executing commands:', err);
+    console.error("Error during execution:", err);
   } else {
-    console.log('Commands executed successfully on all hosts.');
+    console.log("Commands executed successfully on all hosts.");
   }
 });
 ```
 
 ## Options
-- **port**: SSH port (default is `22`).
-- **username**: SSH username (default is `root`).
-- **privateKey**: Path to the private key for authentication.
-- **encoding**: SSH connection encoding (default is `null`).
-- **force**: If set to `true`, risky commands will be executed. Default is `false`.
+
+| Option         | Type             | Default           | Description                                      |
+| -------------- | ---------------- | ----------------- | ------------------------------------------------ |
+| `port`       | number           | `22`            | SSH port                                         |
+| `username`   | string           | `"root"`        | SSH username                                     |
+| `privateKey` | string or Buffer | `~/.ssh/id_rsa` | Path or buffer of private key                    |
+| `encoding`   | string or null   | `null`          | Remote system output encoding (e.g.,`"gbk"`)   |
+| `force`      | boolean          | `false`         | Allow execution of risky commands                |
+| `parallel`   | boolean          | `false`         | Run all hosts in parallel                        |
+| `timestamp`  | boolean          | `false`         | Show detailed logs with timestamps and hostnames |
 
 ## Risky Commands
 
-The following commands are considered risky and will be skipped unless `force` is set to `true`:
+The following commands are considered risky and will be skipped unless `force: true`:
 
-- `rm -rf /`
+- `rm`
+- `rmdir`
+- `del`
+- `rimraf`
+- `rm -rf`
 - `shutdown`
 - `reboot`
-- `del`
+- `mkfs`
+- `dd if=`
+- `chmod 777 /`
+- `chown root`
+- `kill -9 -1`
+- `mv /`
+- `cp /`
+- `del /f /s /q`
 - `format`
+- `netsh advfirewall reset`
+- `netsh firewall`
+- `erase /f`
+- `rd /s /q`
+- `taskkill /F /IM`
+- `reg delete`
+- `sc stop`
 - `sc delete`
 
 ## Contributing
 
-Thanks to [openai/chatgpt](https://openai.com/) for code generation.
+Thanks to https://openai.com/ (ChatGPT) for code generation assistance.
 
 If you want to contribute, feel free to fork the repository and create a pull request.
 
 ## License
 
 MIT License
+"""
